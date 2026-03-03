@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telegram gRPC Test UI</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #112136;
+      --muted: #516071;
+      --accent: #0a7ea4;
+      --border: #d6dee9;
+      --danger: #b31d28;
+      --ok: #0f7a4f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #dceffd 0%, var(--bg) 45%);
+      color: var(--text);
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 28px auto;
+      padding: 0 16px 20px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(22, 40, 70, 0.08);
+    }
+
+    h1 { margin: 0 0 8px; }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    p { margin: 0 0 10px; color: var(--muted); }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    button {
+      border: 0;
+      background: linear-gradient(120deg, #00779c, var(--accent));
+      color: #fff;
+      border-radius: 9px;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #e4edf6;
+      color: #12314f;
+    }
+
+    button.danger {
+      background: linear-gradient(120deg, #a41d2b, #c0394b);
+    }
+
+    pre {
+      margin: 0;
+      background: #0f1722;
+      color: #d5e4f3;
+      border-radius: 10px;
+      padding: 12px;
+      overflow: auto;
+      min-height: 80px;
+    }
+
+    .error {
+      color: var(--danger);
+      min-height: 20px;
+      margin-bottom: 6px;
+    }
+
+    .ok {
+      color: var(--ok);
+      min-height: 20px;
+      margin-bottom: 6px;
+    }
+
+    .qr-wrap {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #f8fbff;
+    }
+
+    .qr-img {
+      width: 220px;
+      height: 220px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: none;
+    }
+
+    .qr-link {
+      margin-top: 8px;
+      word-break: break-all;
+      display: none;
+      font-size: 12px;
+    }
+
+    .msg-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .msg-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+
+    .msg-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .msg-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    @media (max-width: 700px) {
+      .row button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Telegram gRPC Test UI</h1>
+    <p>UI вызывает локальные HTTP endpoints, которые проксируют запросы к gRPC серверу.</p>
+  </div>
+
+  <div class="card">
+    <h2>Session</h2>
+    <div class="row">
+      <button id="create">Create Session</button>
+      <button id="refresh" class="secondary">Refresh QR</button>
+      <button id="delete" class="danger">Delete Session</button>
+    </div>
+
+    <label for="sessionId">Session ID</label>
+    <input id="sessionId" placeholder="session id" />
+
+    <p id="session-error" class="error"></p>
+    <p id="session-ok" class="ok"></p>
+    <pre id="session-out">{}</pre>
+
+    <div class="qr-wrap">
+      <img id="qr-image" class="qr-img" alt="Telegram login QR code" />
+      <a id="qr-link" class="qr-link" target="_blank" rel="noreferrer noopener"></a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>SendMessage</h2>
+    <label for="peer">Peer</label>
+    <input id="peer" placeholder="@durov" />
+
+    <label for="text">Text</label>
+    <textarea id="text" placeholder="Hello"></textarea>
+
+    <button id="send">Send Message</button>
+    <p id="send-error" class="error"></p>
+    <pre id="send-out">{}</pre>
+  </div>
+
+  <div class="card">
+    <h2>Incoming Messages</h2>
+    <div class="row">
+      <button id="start-subscribe">Start Subscribe</button>
+      <button id="stop-subscribe" class="secondary">Stop Subscribe</button>
+    </div>
+    <p id="sub-status" class="ok">Not subscribed</p>
+    <p id="sub-error" class="error"></p>
+    <ul id="messages" class="msg-list"></ul>
+  </div>
+</div>
+
+<script>
+  const sessionIdInput = document.getElementById('sessionId');
+  const sessionOut = document.getElementById('session-out');
+  const sessionErr = document.getElementById('session-error');
+  const sessionOk = document.getElementById('session-ok');
+
+  const qrImage = document.getElementById('qr-image');
+  const qrLink = document.getElementById('qr-link');
+
+  const sendOut = document.getElementById('send-out');
+  const sendErr = document.getElementById('send-error');
+
+  const subStatus = document.getElementById('sub-status');
+  const subErr = document.getElementById('sub-error');
+  const messagesList = document.getElementById('messages');
+
+  let stream = null;
+
+  function setSessionError(message) {
+    sessionErr.textContent = message || '';
+    if (message) sessionOk.textContent = '';
+  }
+
+  function setSessionOk(message) {
+    sessionOk.textContent = message || '';
+    if (message) sessionErr.textContent = '';
+  }
+
+  function renderQR(qrCode) {
+    if (!qrCode) {
+      qrImage.style.display = 'none';
+      qrLink.style.display = 'none';
+      return;
+    }
+
+    const encoded = encodeURIComponent(qrCode);
+    qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+    qrImage.style.display = 'block';
+    qrLink.href = qrCode;
+    qrLink.textContent = qrCode;
+    qrLink.style.display = 'block';
+  }
+
+  async function postJSON(url, payload) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload ? JSON.stringify(payload) : '{}',
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'request failed');
+    }
+    return data;
+  }
+
+  document.getElementById('create').addEventListener('click', async () => {
+    setSessionError('');
+    try {
+      const data = await postJSON('/api/create-session');
+      sessionOut.textContent = JSON.stringify(data, null, 2);
+      sessionIdInput.value = data.session_id || '';
+      renderQR(data.qr_code);
+      setSessionOk('Session created. Scan QR in Telegram app.');
+    } catch (e) {
+      setSessionError(e.message);
+      renderQR('');
+    }
+  });
+
+  document.getElementById('refresh').addEventListener('click', async () => {
+    setSessionError('');
+    const sessionID = sessionIdInput.value.trim();
+    if (!sessionID) {
+      setSessionError('Enter session_id first');
+      return;
+    }
+
+    try {
+      const data = await postJSON('/api/refresh-session', { session_id: sessionID });
+      sessionOut.textContent = JSON.stringify(data, null, 2);
+      renderQR(data.qr_code);
+      setSessionOk('QR code refreshed.');
+    } catch (e) {
+      setSessionError(e.message);
+    }
+  });
+
+  document.getElementById('delete').addEventListener('click', async () => {
+    setSessionError('');
+    const sessionID = sessionIdInput.value.trim();
+    if (!sessionID) {
+      setSessionError('Enter session_id first');
+      return;
+    }
+
+    try {
+      const data = await postJSON('/api/delete-session', { session_id: sessionID });
+      sessionOut.textContent = JSON.stringify(data, null, 2);
+      renderQR('');
+      stopSubscription();
+      setSessionOk('Session deleted.');
+    } catch (e) {
+      setSessionError(e.message);
+    }
+  });
+
+  document.getElementById('send').addEventListener('click', async () => {
+    sendErr.textContent = '';
+    try {
+      const payload = {
+        session_id: sessionIdInput.value.trim(),
+        peer: document.getElementById('peer').value.trim(),
+        text: document.getElementById('text').value,
+      };
+      const data = await postJSON('/api/send-message', payload);
+      sendOut.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      sendErr.textContent = e.message;
+    }
+  });
+
+  function addIncomingMessage(msg) {
+    const item = document.createElement('li');
+    item.className = 'msg-item';
+
+    const date = new Date((msg.timestamp || 0) * 1000);
+    const timestamp = Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = `#${msg.message_id} | ${msg.from || 'unknown'} | ${timestamp}`;
+
+    const text = document.createElement('div');
+    text.className = 'msg-text';
+    text.textContent = msg.text || '';
+
+    item.appendChild(meta);
+    item.appendChild(text);
+
+    messagesList.insertBefore(item, messagesList.firstChild);
+    while (messagesList.children.length > 100) {
+      messagesList.removeChild(messagesList.lastChild);
+    }
+  }
+
+  function stopSubscription() {
+    if (stream) {
+      stream.close();
+      stream = null;
+    }
+    subStatus.textContent = 'Not subscribed';
+  }
+
+  document.getElementById('start-subscribe').addEventListener('click', () => {
+    subErr.textContent = '';
+    const sessionID = sessionIdInput.value.trim();
+    if (!sessionID) {
+      subErr.textContent = 'Enter session_id first';
+      return;
+    }
+
+    stopSubscription();
+
+    stream = new EventSource(`/api/subscribe-messages?session_id=${encodeURIComponent(sessionID)}`);
+    subStatus.textContent = `Subscribed to ${sessionID}`;
+
+    stream.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        addIncomingMessage(data);
+      } catch {
+      }
+    };
+
+    stream.onerror = () => {
+      subErr.textContent = 'Subscription disconnected';
+      stopSubscription();
+    };
+  });
+
+  document.getElementById('stop-subscribe').addEventListener('click', () => {
+    stopSubscription();
+  });
+</script>
+</body>
+</html>

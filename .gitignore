@@ -4,8 +4,6 @@
 *.dll
 *.so
 *.dylib
-app
-ui
 
 # Build artifacts
 bin/

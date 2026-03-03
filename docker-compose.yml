@@ -1,0 +1,29 @@
+﻿version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app-runtime
+    env_file:
+      - .env
+    environment:
+      GRPC_LISTEN_ADDR: :50051
+    ports:
+      - "50051:50051"
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ui-runtime
+    depends_on:
+      - app
+    environment:
+      TELEGRAM_UI_ADDR: :8085
+      TELEGRAM_GRPC_ADDR: app:50051
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
